@@ -1,12 +1,10 @@
 const express = require('express');
-
 const router = express.Router();
-
-//User model
-const User = require('../models/User');
-
-//bcrypt para encriptar claves
 const bcrypt = require('bcryptjs');
+const passport = require('passport');
+
+// Load User model
+const User = require('../models/User');
 
 //Login
 router.get('/login', (req, res) => {
@@ -54,7 +52,7 @@ router.post('/register', (req, res) => {
         })
     }
 
-    console.log(`Errores: ${errors.length} : Mensaje: ${msg}`);
+    //console.log(`Errores: ${errors.length} : Mensaje: ${msg}`);
 
     if (errors.length > 0) {
 
@@ -66,39 +64,66 @@ router.post('/register', (req, res) => {
             password2
         })
     } else {
-        //res.send('aceptado')
-        //Buscar si el correo ya existe
         User.findOne({
-                email: email
-            })
-            .then(user => {
-                if (user) {
-                    //El correo Existe
-                    //msg = 'El Correo indicado ya existe';
-                    errors.push({
-                        msg: 'El Correo indicado ya existe'
-                    })
-                    res.render('register', {
-                        errors,
-                        name,
-                        email,
-                        password,
-                        password2
-                    })
-                } else {
-                    //El Correo no existe
-                    const newUser = new User({
-                        name,
-                        email,
-                        password
-                    })
-                }
-                console.log(newUser);
-                res.send('sup');
+            email: email
+        }).then(user => {
+            if (user) {
+                //El correo Existe
+                //msg = 'El Correo indicado ya existe';
+                errors.push({
+                    msg: 'El Correo indicado ya existe'
+                })
+                res.render('register', {
+                    errors,
+                    name,
+                    email,
+                    password,
+                    password2
+                })
+            } else {
+                //El Correo no existe
+                const newUser = new User({
+                    name,
+                    email,
+                    password
+                });
+                // Encriptar clave
+                bcrypt.genSalt(10, (err, salt) => {
+                    bcrypt.hash(newUser.password, salt, (err, hash) => {
+                        if (err) throw err;
+                        //cambiar la clave encriptada
+                        newUser.password = hash;
+                        //guardar el usuario
+                        newUser.save().then(user => {
+                                req.flash('success_msg', 'Ha sido registrado exitosamente, ahora puede iniciar sesión');
+                                res.redirect('/users/login')
+                            })
+                            .catch(err => console.log(err));
 
-            })
-            .catch(err => console.log(err));
+                    })
+                })
+            }
+
+        })
+        //.catch(err => console.log(err));
     }
+})
+
+//Login Handle
+router.post('/login', (req, res, next) => {
+    passport.authenticate('local', {
+        successRedirect: '/dashboard',
+        failureRedirect: '/users/login',
+        failureFlash: true
+    })(req, res, next);
+});
+
+//Cerrar sesión
+router.get('/logout', (req, res) => {
+    req.logout();
+    req.flash('success_msg', 'Adios');
+    res.redirect('/users/login');
+
 })
 
 module.exports = router;
